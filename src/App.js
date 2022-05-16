@@ -1,42 +1,82 @@
-import React from "react";
-import "./App.css";
-import { useEffect, useState } from "react";
-import Web3 from "web3";
+import React, { useState } from "react";
+import { ethers } from "ethers";
+import ErrorMessage from "./ErrorMessage";
+import TxList from "./TxList";
 
-function App() {
-  const [account, setAccount] = useState();
-  const [network, setNetwork] = useState();
-  const [balance, setBalance] = useState();
-  const web3 = new Web3(Web3.givenProvider || "http://localhost:7545");
+const startPayment = async ({ setError, setTxs, ether, addr }) => {
+  try {
+    if (!window.ethereum)
+      throw new Error("No crypto wallet found. Please install it.");
 
-  async function loadAccount() {
-    const accounts = await web3.eth.requestAccounts();
-    setAccount(accounts[0]);
+    await window.ethereum.send("eth_requestAccounts");
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+    ethers.utils.getAddress(addr);
+    const tx = await signer.sendTransaction({
+      to: addr,
+      value: ethers.utils.parseEther(ether),
+    });
+    console.log({ ether, addr });
+    console.log("tx", tx);
+    setTxs([tx]);
+  } catch (err) {
+    setError(err.message);
   }
-  async function loadBalance() {
-    const network = await web3.eth.net.getNetworkType();
-    const balance = await web3.eth.getBalance(account, "latest");
-    setBalance(balance);
-    setNetwork(network);
-  }
+};
 
-  useEffect(() => {
-    loadAccount();
-  }, []);
+export default function App() {
+  const [error, setError] = useState();
+  const [txs, setTxs] = useState([]);
 
-  useEffect(() => {
-    console.log("switch");
-    loadBalance();
-  }, [account]);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const data = new FormData(e.target);
+    setError();
+    await startPayment({
+      setError,
+      setTxs,
+      ether: data.get("ether"),
+      addr: data.get("addr"),
+    });
+  };
 
-  console.log(account);
   return (
-    <div className="App">
-      <p>my account {account}</p>
-      <p>network {network}</p>
-      <p>balance {balance}</p>
-    </div>
+    <form className="m-4" onSubmit={handleSubmit}>
+      <div className="credit-card w-full lg:w-1/2 sm:w-auto shadow-lg mx-auto rounded-xl bg-white">
+        <main className="mt-4 p-4">
+          <h1 className="text-xl font-semibold text-gray-700 text-center">
+            Send ETH payment
+          </h1>
+          <div className="">
+            <div className="my-3">
+              <input
+                type="text"
+                name="addr"
+                className="input input-bordered block w-full focus:ring focus:outline-none"
+                placeholder="Recipient Address"
+              />
+            </div>
+            <div className="my-3">
+              <input
+                name="ether"
+                type="text"
+                className="input input-bordered block w-full focus:ring focus:outline-none"
+                placeholder="Amount in ETH"
+              />
+            </div>
+          </div>
+        </main>
+        <footer className="p-4">
+          <button
+            type="submit"
+            className="btn btn-primary submit-button focus:ring focus:outline-none w-full"
+          >
+            Pay now
+          </button>
+          <ErrorMessage message={error} />
+          <TxList txs={txs} />
+        </footer>
+      </div>
+    </form>
   );
 }
-
-export default App;
